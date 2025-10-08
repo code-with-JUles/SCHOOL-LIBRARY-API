@@ -9,6 +9,7 @@ dotenv.config();
   database: process.env.DB_NAME
 });
 
+
 connection.connect((err)=>{
     if(err){
         console.log('Error connecting to database', err);
@@ -16,5 +17,6 @@ connection.connect((err)=>{
         console.log('Connected to database');
     }
 });
+
 
 module.exports = {connection}; 
