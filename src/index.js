@@ -9,9 +9,25 @@
 `npm install mysql2
 
 */
+/* security:
+
+1.  bcryptjs: for hashing passwords
+2.  jsonwebtoken: for authentication
+3. dotenv: for environment variables
+
+
+`npm install bcryptjs jsonwebtoken dotenv`
+
+*/
+
 
 const express = require("express");
 const mysql = require("mysql2");
+const dotenv = require('dotenv');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+dotenv.config();
+
 
 // const app = express();
 // import db connection
@@ -155,10 +171,62 @@ app.get('/api/books/search', (req, res) => {
 });
 
 
+
+//  USER MANAGEMENT ENDPOINTS ==================
+// 1. Register a new user
+app.post('/api/user/register', async (req, res)=>{
+ const {name, email, password, role} = req.body;
+ if(!name || !email || !password ){
+  return res.status(400).json({ message: 'name, email and password are required' });
+}
+
+const  hashedPassword = await bcrypt.hash(password, 10); // hash the password
+
+const  query =  `
+INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)                  
+`
+connection.query(query, [name,email, hashedPassword, role],(err, result)=>{
+  if(err) return res.status(500).json({ message: 'Error registering user', error: err });
+  return res.status(201).json({ message: 'User registered successfully' });
+})
+});
+
+
+// 2. Login a user
+
+app.post('/api/user/login',  (req, res)=>{
+const {email, password} = req.body;
+/*   steps
+  1. check if user exists using  email provided by user , if yes them  fetch user from database
+  2. compare password  user  provided password we have in databse 
+  3. if password is correct, generate a token and send it to user
+*/
+
+//! we use  async and  await in other  to  to  avoid  parallel execution  of code (parent functin need  to wait for child function to complete)
+// 1. check if user exists using  email provided by user , if yes them  fetch user from database
+const query = `SELECT * FROM users WHERE email = ?`;
+connection.query(query, [email], async (err, result)=>{
+  if(err) return res.status(500).json({ message: 'Error logging in', error: err });
+  if(result.length === 0){
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+  const user = result[0];
+  // 2. compare password  user  provided password we have in database 
+  const  isPasswordCorrect= await bcrypt.compare(password, user.password);
+  if(!isPasswordCorrect){
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+  // 3. if password is correct, generate a token and send it to user
+  const token = jwt.sign(
+    {id: user.id, role: user.role}, 
+    process.env.JWT_SECRET_KEY,
+    {expiresIn: process.env.JWT_EXPIRES}
+  );
+  return res.status(200).json({ message: 'Login successful', token });
+})
+})
 // Server listen
 app.listen(3000, () => {
   console.log('🚀 Server is running on port 3000');
 });
 
-//! ---- TUESDAY TASK  COMPLETE student, class, bookscategory_id endpoints  -----
-//? CRUD + search
