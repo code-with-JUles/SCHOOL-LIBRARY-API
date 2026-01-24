@@ -51,6 +51,36 @@ app.use((req, res, next) => {
   next();
 });
 
+
+//? authentication middleware
+const  authenticate = (req, res, next)=>{
+const   authHeader  =  req.headers.authorization;
+if(!authHeader){
+  return res.status(401).json({message: "no token  prvided"})
+}
+
+// this  is  a  pen  = split(' ') => [this, is, a, pen] 
+const  token  =  authHeader.split(" ")[1] //  turn in to array and  take   value in  second  index
+jwt.verify(token, process.env.JWT_SECRET_KEY, (err, user)=>{
+  if(err){
+    return res.status(401).json({message: "invalid  token"});
+  }
+  req.user = user; 
+  next();
+})
+
+}
+
+//! 
+const  authorize =  (roles = [])=>{
+  return(req, res,  next) =>{
+if(!roles.includes(req.user.role)){
+  return res.status(403).json({message: "acess denied"})
+}
+next();
+  }
+}
+
 // Root test route
 app.get('/', (req, res) => {
   res.send('📚 Welcome to School Library API Server');
@@ -63,9 +93,18 @@ app.get('/', (req, res) => {
 
 
 // 1️⃣ CREATE Book
-app.post('/api/books', (req, res) => {
+app.post('/api/books', authenticate, (req, res) => {
   const { title, author, category_id, isbn, total_copies, available_copies } = req.body;
-
+  /* sample  body  json:
+  {
+    "title": "The Great Gatsby",
+    "author": "F. Scott Fitzgerald",
+    "category_id": 1,
+    "isbn": "9780743273565",
+    "total_copies": 10,
+    "available_copies": 10
+  }
+  */
   const query = `
     INSERT INTO books (title, author, category_id, isbn, total_copies, available_copies)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -139,7 +178,7 @@ app.put('/api/books/:id', (req, res) => {
 
 
 // 5️⃣ DELETE Book
-app.delete('/api/books/:id', (req, res) => {
+app.delete('/api/books/:id', authenticate, authorize(['librarian']), (req, res) => {
   const { id } = req.params;
 
   const query = `DELETE FROM books WHERE id = ?`;
@@ -225,6 +264,10 @@ connection.query(query, [email], async (err, result)=>{
   return res.status(200).json({ message: 'Login successful', token });
 })
 })
+
+
+//? auntication  middleware
+
 // Server listen
 app.listen(3000, () => {
   console.log('🚀 Server is running on port 3000');
