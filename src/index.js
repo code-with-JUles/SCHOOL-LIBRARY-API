@@ -26,6 +26,9 @@ const mysql = require("mysql2");
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./swagger");
+
 dotenv.config();
 
 
@@ -44,12 +47,23 @@ connection.connect((err) => {
 
 const app = express();
 app.use(express.json());
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 
 // Middleware to log requests
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url} -> ${res.statusCode}`);
   next();
 });
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Auth
+ *     description: User authentication
+ *   - name: Books
+ *     description: Book management operations
+ */
 
 
 //? authentication middleware
@@ -71,7 +85,7 @@ jwt.verify(token, process.env.JWT_SECRET_KEY, (err, user)=>{
 
 }
 
-//! 
+//!  check   role  on  action 
 const  authorize =  (roles = [])=>{
   return(req, res,  next) =>{
 if(!roles.includes(req.user.role)){
@@ -91,6 +105,42 @@ app.get('/', (req, res) => {
 // ========== BOOKS ENDPOINTS ============
 // =======================================
 
+/**
+ * @swagger
+ * /api/books:
+ *   post:
+ *     summary: Create a new book
+ *     tags: [Books]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - author
+ *             properties:
+ *               title:
+ *                 type: string
+ *               author:
+ *                 type: string
+ *               category_id:
+ *                 type: number
+ *               isbn:
+ *                 type: string
+ *               total_copies:
+ *                 type: number
+ *               available_copies:
+ *                 type: number
+ *     responses:
+ *       201:
+ *         description: Book created successfully
+ *       401:
+ *         description: Unauthorized - No token provided
+ */
 
 // 1️⃣ CREATE Book
 app.post('/api/books', authenticate, (req, res) => {
@@ -119,6 +169,39 @@ app.post('/api/books', authenticate, (req, res) => {
   });
 });
 
+/**
+ * @swagger
+ * /api/books:
+ *   get:
+ *     summary: Get all books
+ *     tags: [Books]
+ *     responses:
+ *       200:
+ *         description: List of books
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   title:
+ *                     type: string
+ *                   author:
+ *                     type: string
+ *                   category_id:
+ *                     type: integer
+ *                   category_name:
+ *                     type: string
+ *                   isbn:
+ *                     type: string
+ *                   total_copies:
+ *                     type: integer
+ *                   available_copies:
+ *                     type: integer
+ */
 
 // 2️⃣ GET all books (with category name)
 app.get('/api/books', (req, res) => {
@@ -139,6 +222,26 @@ app.get('/api/books', (req, res) => {
 });
 
 
+/**
+ * @swagger
+ * /api/books/{id}:
+ *   get:
+ *     summary: Get a single book by ID
+ *     tags: [Books]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Book ID
+ *     responses:
+ *       200:
+ *         description: Book details
+ *       404:
+ *         description: Book not found
+ */
+
 // 3️⃣ GET single book by ID
 app.get('/api/books/:id', (req, res) => {
   const { id } = req.params;
@@ -157,6 +260,49 @@ app.get('/api/books/:id', (req, res) => {
   });
 });
 
+
+/**
+ * @swagger
+ * /api/books/{id}:
+ *   put:
+ *     summary: Update a book
+ *     tags: [Books]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Book ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               author:
+ *                 type: string
+ *               category_id:
+ *                 type: number
+ *               isbn:
+ *                 type: string
+ *               total_copies:
+ *                 type: number
+ *               available_copies:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Book updated successfully
+ *       404:
+ *         description: Book not found
+ *       401:
+ *         description: Unauthorized
+ */
 
 // 4️⃣ UPDATE Book
 app.put('/api/books/:id', (req, res) => {
@@ -177,6 +323,32 @@ app.put('/api/books/:id', (req, res) => {
 });
 
 
+/**
+ * @swagger
+ * /api/books/{id}:
+ *   delete:
+ *     summary: Delete a book
+ *     tags: [Books]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Book ID
+ *     responses:
+ *       200:
+ *         description: Book deleted successfully
+ *       404:
+ *         description: Book not found
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied - Librarian role required
+ */
+
 // 5️⃣ DELETE Book
 app.delete('/api/books/:id', authenticate, authorize(['librarian']), (req, res) => {
   const { id } = req.params;
@@ -190,6 +362,24 @@ app.delete('/api/books/:id', authenticate, authorize(['librarian']), (req, res) 
   });
 });
 
+
+/**
+ * @swagger
+ * /api/books/search:
+ *   get:
+ *     summary: Search books by title or author
+ *     tags: [Books]
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Search query (title or author)
+ *     responses:
+ *       200:
+ *         description: List of matching books
+ */
 
 // 6️⃣ SEARCH books by title or author
 app.get('/api/books/search', (req, res) => {
@@ -213,6 +403,39 @@ app.get('/api/books/search', (req, res) => {
 
 //  USER MANAGEMENT ENDPOINTS ==================
 // 1. Register a new user
+/**
+ * @swagger
+ * /api/user/register:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - password
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 example: librarian
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *       400:
+ *         description: Missing fields
+ */
+
 app.post('/api/user/register', async (req, res)=>{
  const {name, email, password, role} = req.body;
  if(!name || !email || !password ){
@@ -231,8 +454,43 @@ connection.query(query, [name,email, hashedPassword, role],(err, result)=>{
 });
 
 
-// 2. Login a user
+/**
+ * @swagger
+ * /api/user/login:
+ *   post:
+ *     summary: Login a user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 token:
+ *                   type: string
+ *       401:
+ *         description: Invalid email or password
+ */
 
+// 2. Login a user
 app.post('/api/user/login',  (req, res)=>{
 const {email, password} = req.body;
 /*   steps
